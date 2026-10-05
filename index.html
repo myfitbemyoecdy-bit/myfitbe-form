@@ -266,7 +266,9 @@ $('addItem').onclick = addItem;
 addItem(); recalc();
 
 function send(data) {
-  if (tg?.initData) tg.sendData(JSON.stringify(data)); // inside Telegram: closes the form; the bot gets it
+  // Keyboard-button Mini Apps get an EMPTY initData by design (only sendData works), so detect Telegram by platform:
+  // outside Telegram the SDK reports platform "unknown".
+  if (tg && tg.platform && tg.platform !== 'unknown') tg.sendData(JSON.stringify(data)); // closes the form; the bot gets it
   else $('err').textContent = 'Preview (outside Telegram): ' + JSON.stringify(data);
 }
 $('submit').onclick = () => {
