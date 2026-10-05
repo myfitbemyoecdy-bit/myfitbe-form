@@ -139,6 +139,8 @@
 </div>
 
 <div class="card bill">
+  <h2>💰 Payment Status</h2>
+  <div class="seg" style="margin-bottom:10px"><button type="button" data-st="paid" class="on">✅ Paid</button><button type="button" data-st="issued">⏳ Payment Pending</button></div>
   <h2 class="b2c">💳 Payment Mode</h2>
   <div class="seg b2c"><button type="button" data-pay="cash" class="on">💵 Cash</button><button type="button" data-pay="upi">📲 UPI</button></div>
   <label for="notes">Notes / Terms &amp; Conditions</label>
@@ -146,7 +148,7 @@
 </div>
 
 <div class="err" id="err"></div>
-<button class="submit" type="button" id="submit">💾 Save as Draft</button>
+<button class="submit" type="button" id="submit">💾 Save Bill</button>
 
 <script>
 const STATES = [["Andaman and Nicobar Islands","35"],["Andhra Pradesh","37"],["Arunachal Pradesh","12"],["Assam","18"],["Bihar","10"],["Chandigarh","04"],["Chhattisgarh","22"],["Dadra and Nagar Haveli and Daman and Diu","26"],["Delhi","07"],["Goa","30"],["Gujarat","24"],["Haryana","06"],["Himachal Pradesh","02"],["Jammu and Kashmir","01"],["Jharkhand","20"],["Karnataka","29"],["Kerala","32"],["Ladakh","38"],["Lakshadweep","31"],["Madhya Pradesh","23"],["Maharashtra","27"],["Manipur","14"],["Meghalaya","17"],["Mizoram","15"],["Nagaland","13"],["Odisha","21"],["Puducherry","34"],["Punjab","03"],["Rajasthan","08"],["Sikkim","11"],["Tamil Nadu","33"],["Telangana","36"],["Tripura","16"],["Uttar Pradesh","09"],["Uttarakhand","05"],["West Bengal","19"],["Other Territory","97"]];
@@ -182,11 +184,12 @@ function setMode(m) {
   document.querySelectorAll('.bill').forEach((e) => e.classList.toggle('hide', m === 'exp'));
   $('title').textContent = { b2c: '🧾 Create B2C Bill', b2b: '🧾 Create Tax Invoice (B2B)', exp: '💸 Add Expense' }[m];
   $('typeTitle').textContent = m === 'b2b' ? '📋 Select Invoice Type' : '📋 Select Bill Type';
-  $('submit').textContent = m === 'exp' ? '💾 Save Expense' : '💾 Save as Draft';
+  $('submit').textContent = m === 'exp' ? '💾 Save Expense' : '💾 Save Bill';
   $('err').textContent = ''; recalc();
 }
 document.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
-let billType = 'tax_invoice', pay = 'cash';
+let billType = 'tax_invoice', pay = 'cash', status = 'paid';
+document.querySelectorAll('[data-st]').forEach((b) => b.onclick = () => { status = b.dataset.st; document.querySelectorAll('[data-st]').forEach((x) => x.classList.toggle('on', x === b)); });
 document.querySelectorAll('[data-type]').forEach((b) => b.onclick = () => { billType = b.dataset.type; document.querySelectorAll('[data-type]').forEach((x) => x.classList.toggle('on', x === b)); });
 document.querySelectorAll('[data-pay]').forEach((b) => b.onclick = () => { pay = b.dataset.pay; document.querySelectorAll('[data-pay]').forEach((x) => x.classList.toggle('on', x === b)); });
 const pos = () => (mode === 'b2b' ? $('pos') : $('state')).value;
@@ -265,7 +268,7 @@ $('submit').onclick = () => {
     if (ls.some((l) => !l.pid || !(l.qty > 0) || !(l.rate > 0))) errs.push('product, qty and rate on every item');
     if (errs.length) { $('err').textContent = 'Please fill: ' + errs.join(', '); return; }
     return send({ v: 2, kind: 'b2b', type: billType, date: $('date').value || istToday(), due: $('due').value || null,
-      client: $('client').value, state_code: $('pos').value, rc: $('rc2').checked, sampling: $('sampling2').checked,
+      client: $('client').value, state_code: $('pos').value, status, rc: $('rc2').checked, sampling: $('sampling2').checked,
       notes: $('notes').value.trim().slice(0, 300) || null, items: ls.map((l) => ({ pid: l.pid, bid: l.bid || null, q: l.qty, r: l.rate, d: l.disc, g: l.gst })) });
   }
   const phone = $('phone').value.replace(/\D/g, '').slice(-10);
@@ -278,7 +281,7 @@ $('submit').onclick = () => {
   if (ls.some((l) => !l.pid || !(l.qty > 0) || !(l.rate > 0))) errs.push('product, qty and rate on every item');
   if (errs.length) { $('err').textContent = 'Please fill: ' + errs.join(', '); return; }
   const st = STATES.find(([, c]) => c === $('state').value);
-  const data = { v: 2, kind: 'b2c', type: billType, date: $('date').value || istToday(), due: $('due').value || null,
+  const data = { v: 2, kind: 'b2c', status, type: billType, date: $('date').value || istToday(), due: $('due').value || null,
     naam: $('naam').value.trim().slice(0, 80), phone, email: $('email').value.trim().slice(0, 120) || null,
     pincode: $('pincode').value.replace(/\D/g, '').slice(0, 6) || null, address: $('address').value.trim().slice(0, 300) || null,
     state: st[0], state_code: st[1], rc: $('rc').checked, sampling: $('sampling').checked, pay, notes: $('notes').value.trim().slice(0, 300) || null,
