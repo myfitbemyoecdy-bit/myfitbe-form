@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MYFITBE — New Bill</title>
+<!-- Telegram Mini App for @myfitbe_ceo_bot — the same fields as the HQ app's "Create B2C Bill" form.
+     This page holds NO customer data, keys or prices. The bot passes the product catalogue (name, HSN, unit,
+     GST %, batches) in the URL (?d=…); on submit the filled form goes to the bot through Telegram
+     (WebApp.sendData). The bot checks who sent it and saves the DRAFT bill on the Mac. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --fg: var(--tg-theme-text-color, #111111);
+    --muted: var(--tg-theme-hint-color, #6b7280);
+    --card: var(--tg-theme-secondary-bg-color, #f3f4f6);
+    --accent: var(--tg-theme-button-color, #2563eb);
+    --accent-fg: var(--tg-theme-button-text-color, #ffffff);
+    --danger: #dc2626;
+    --warn: #b45309;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px 16px 32px; background: var(--bg); color: var(--fg);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  .card { background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select, textarea { width: 100%; font: inherit; color: var(--fg); background: var(--bg);
+         border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent); border-radius: 8px; padding: 9px; }
+  input[readonly] { opacity: .7; }
+  textarea { min-height: 56px; resize: vertical; }
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tabs button, .seg button { font: inherit; padding: 9px; border-radius: 8px; border: 2px solid transparent; background: var(--bg); color: var(--fg); }
+  .tabs button.on, .seg button.on { border-color: var(--accent); font-weight: 700; }
+  .tabs3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .tabs3 button { font: inherit; font-weight: 600; padding: 10px 4px; border-radius: 10px; border: 2px solid transparent; background: var(--card); color: var(--fg); }
+  .tabs3 button.on { border-color: var(--accent); background: var(--bg); }
+  .hide { display: none !important; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .check { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 14px; color: var(--fg); }
+  .check input { width: auto; }
+  .item { border-top: 1px solid color-mix(in srgb, var(--muted) 30%, transparent); padding-top: 8px; margin-top: 8px; }
+  .item:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+  .ihead { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+  .x { background: none; border: 0; color: var(--danger); font-size: 22px; padding: 0 4px; }
+  .calc { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 13px; margin-top: 8px; }
+  .calc div { background: var(--bg); border-radius: 8px; padding: 6px 8px; }
+  .calc b { display: block; font-size: 14px; }
+  .add { width: 100%; font: inherit; padding: 10px; border-radius: 8px; border: 1px dashed var(--muted); background: transparent; color: var(--fg); margin-top: 10px; }
+  .warn { color: var(--warn); font-size: 13px; margin-top: 8px; }
+  .sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
+  .sum .big { font-size: 18px; font-weight: 700; }
+  .err { color: var(--danger); font-size: 14px; min-height: 20px; white-space: pre-wrap; word-break: break-word; }
+  .submit { width: 100%; font: inherit; font-weight: 700; padding: 14px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-fg); }
+</style>
+</head>
+<body>
+<h1 id="title">🧾 Create B2C Bill</h1>
+<div class="tabs3" id="modes">
+  <button type="button" data-mode="b2c" class="on">B2C Bill</button>
+  <button type="button" data-mode="b2b">B2B Invoice</button>
+  <button type="button" data-mode="exp">Expense</button>
+</div>
+
+<div class="card bill">
+  <h2 id="typeTitle">📋 Select Bill Type</h2>
+  <div class="tabs" id="types">
+    <button type="button" data-type="tax_invoice" class="on">Tax Invoice</button>
+    <button type="button" data-type="proforma">Proforma Invoice</button>
+    <button type="button" data-type="credit_note">Credit Note</button>
+    <button type="button" data-type="debit_note">Debit Note</button>
+  </div>
+  <div class="g2">
+    <div><label for="date">Billing Date</label><input id="date" type="date"></div>
+    <div><label for="due">Due Date (Optional)</label><input id="due" type="date"></div>
+  </div>
+</div>
+
+<div class="card b2b">
+  <h2>👤 Select Client</h2>
+  <label for="client">Client / Buyer *</label>
+  <select id="client"></select>
+  <label for="pos">Place of Supply *</label>
+  <select id="pos"></select>
+  <div class="warn" id="inter2"></div>
+  <label class="check"><input id="rc2" type="checkbox"> Reverse Charge Applicable</label>
+  <label class="check"><input id="sampling2" type="checkbox"> Is Free Sample / Sampling</label>
+</div>
+
+<div class="card exp">
+  <h2>💸 Add Expense</h2>
+  <label for="eDesc">Description / Spent For *</label>
+  <input id="eDesc" type="text" placeholder="e.g. Petrol, Courier, Meta ads">
+  <div class="g2">
+    <div><label for="eAmt">Amount (₹) *</label><input id="eAmt" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+    <div><label for="eDate">Expense Date</label><input id="eDate" type="date"></div>
+  </div>
+  <label for="eCat">Category</label>
+  <select id="eCat"></select>
+</div>
+
+<div class="card b2c">
+  <h2>👤 Consumer Details</h2>
+  <label for="naam">Consumer / Client Name *</label>
+  <input id="naam" type="text" placeholder="Enter customer name (e.g. John Doe / Cash)" autocomplete="off">
+  <label for="phone">Mobile Number *</label>
+  <input id="phone" type="tel" inputmode="numeric" placeholder="e.g. 9876543210" autocomplete="off">
+  <label for="email">Email Address</label>
+  <input id="email" type="email" placeholder="e.g. customer@email.com" autocomplete="off">
+  <div class="g2">
+    <div><label for="pincode">Pincode</label><input id="pincode" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 110001"></div>
+    <div><label for="state">Place of Supply (State) *</label><select id="state"></select></div>
+  </div>
+  <label for="address">Billing Address</label>
+  <textarea id="address" placeholder="Enter consumer's location or street details (blank for a repeat customer = the bot asks about the old address)"></textarea>
+  <div class="warn" id="inter"></div>
+  <label class="check"><input id="rc" type="checkbox"> Reverse Charge Applicable</label>
+  <label class="check"><input id="sampling" type="checkbox"> Is Free Sample / Sampling</label>
+</div>
+
+<div class="card bill">
+  <h2>📦 Line Items</h2>
+  <div id="items"></div>
+  <button class="add" type="button" id="addItem">➕ Add Item</button>
+</div>
+
+<div class="card bill">
+  <h2>✅ Review</h2>
+  <div class="sum">
+    <span>Taxable Value</span><span id="sTaxable">₹0.00</span>
+    <span id="lTax1">CGST</span><span id="sTax1">₹0.00</span>
+    <span id="lTax2">SGST</span><span id="sTax2">₹0.00</span>
+    <span class="big">Grand Total</span><span class="big" id="sTotal">₹0.00</span>
+  </div>
+</div>
+
+<div class="card bill">
+  <h2 class="b2c">💳 Payment Mode</h2>
+  <div class="seg b2c"><button type="button" data-pay="cash" class="on">💵 Cash</button><button type="button" data-pay="upi">📲 UPI</button></div>
+  <label for="notes">Notes / Terms &amp; Conditions</label>
+  <textarea id="notes" placeholder="Payment details, delivery instructions, notes..."></textarea>
+</div>
+
+<div class="err" id="err"></div>
+<button class="submit" type="button" id="submit">💾 Save as Draft</button>
+
+<script>
+const STATES = [["Andaman and Nicobar Islands","35"],["Andhra Pradesh","37"],["Arunachal Pradesh","12"],["Assam","18"],["Bihar","10"],["Chandigarh","04"],["Chhattisgarh","22"],["Dadra and Nagar Haveli and Daman and Diu","26"],["Delhi","07"],["Goa","30"],["Gujarat","24"],["Haryana","06"],["Himachal Pradesh","02"],["Jammu and Kashmir","01"],["Jharkhand","20"],["Karnataka","29"],["Kerala","32"],["Ladakh","38"],["Lakshadweep","31"],["Madhya Pradesh","23"],["Maharashtra","27"],["Manipur","14"],["Meghalaya","17"],["Mizoram","15"],["Nagaland","13"],["Odisha","21"],["Puducherry","34"],["Punjab","03"],["Rajasthan","08"],["Sikkim","11"],["Tamil Nadu","33"],["Telangana","36"],["Tripura","16"],["Uttar Pradesh","09"],["Uttarakhand","05"],["West Bengal","19"],["Other Territory","97"]];
+// Catalogue from the bot: ?d=base64url(JSON {co:'08', p:[{id,n,hsn,u,gst,b:[{id,no,exp,q}]}]}). No prices, no customers.
+const tg = window.Telegram?.WebApp; tg?.ready(); tg?.expand();
+function catalogue() {
+  try { const d = new URLSearchParams(location.search).get('d');
+        return JSON.parse(decodeURIComponent(escape(atob(d.replace(/-/g, '+').replace(/_/g, '/'))))); }
+  catch { return { co: '08', p: [] }; }
+}
+const CAT = catalogue(); // + c: [{id,n,sc}] clients for B2B (names only)
+const EXP_CATS = ['Office Supplies', 'Rent & Utilities', 'Travel & Transport', 'Inventory Purchases', 'Marketing & Sales', 'Salaries & Wages', 'Other'];
+let mode = 'b2c';
+const $ = (id) => document.getElementById(id);
+const r2 = (n) => Math.round(n * 100) / 100;
+const inr = (n) => '₹' + r2(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const istToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+$('date').value = istToday(); $('eDate').value = istToday();
+$('eCat').innerHTML = EXP_CATS.map((c) => `<option>${c}</option>`).join('');
+$('client').innerHTML = '<option value="">— Select client —</option>' + (CAT.c || []).map((c) => `<option value="${c.id}">${c.n}</option>`).join('');
+$('state').innerHTML = STATES.map(([n, c]) => `<option value="${c}">${n} (${c})</option>`).join('');
+$('state').value = CAT.co || '08';
+$('pos').innerHTML = $('state').innerHTML; $('pos').value = CAT.co || '08';
+$('client').onchange = () => { const c = (CAT.c || []).find((x) => x.id === $('client').value); if (c?.sc) $('pos').value = c.sc; recalc(); };
+$('pos').onchange = () => recalc();
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  document.querySelectorAll('.b2c').forEach((e) => e.classList.toggle('hide', m !== 'b2c'));
+  document.querySelectorAll('.b2b').forEach((e) => e.classList.toggle('hide', m !== 'b2b'));
+  document.querySelectorAll('.exp').forEach((e) => e.classList.toggle('hide', m !== 'exp'));
+  document.querySelectorAll('.bill').forEach((e) => e.classList.toggle('hide', m === 'exp'));
+  $('title').textContent = { b2c: '🧾 Create B2C Bill', b2b: '🧾 Create Tax Invoice (B2B)', exp: '💸 Add Expense' }[m];
+  $('typeTitle').textContent = m === 'b2b' ? '📋 Select Invoice Type' : '📋 Select Bill Type';
+  $('submit').textContent = m === 'exp' ? '💾 Save Expense' : '💾 Save as Draft';
+  $('err').textContent = ''; recalc();
+}
+document.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
+let billType = 'tax_invoice', pay = 'cash';
+document.querySelectorAll('[data-type]').forEach((b) => b.onclick = () => { billType = b.dataset.type; document.querySelectorAll('[data-type]').forEach((x) => x.classList.toggle('on', x === b)); });
+document.querySelectorAll('[data-pay]').forEach((b) => b.onclick = () => { pay = b.dataset.pay; document.querySelectorAll('[data-pay]').forEach((x) => x.classList.toggle('on', x === b)); });
+const pos = () => (mode === 'b2b' ? $('pos') : $('state')).value;
+const inter = () => pos() !== (CAT.co || '08');
+
+function addItem() {
+  const n = document.querySelectorAll('.item').length + 1;
+  const d = document.createElement('div'); d.className = 'item';
+  d.innerHTML = `<div class="ihead"><span>Item #${n}</span><button class="x" type="button" title="Remove">×</button></div>
+    <label>Product/Service *</label><select class="p"><option value="">— Select product —</option>${CAT.p.map((p) => `<option value="${p.id}">${p.n}</option>`).join('')}</select>
+    <label>Batch</label><select class="b"><option value="">—</option></select>
+    <div class="g3">
+      <div><label>HSN/SAC</label><input class="hsn" readonly></div>
+      <div><label>Qty *</label><input class="q" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></div>
+      <div><label>Unit</label><input class="u" readonly></div>
+    </div>
+    <div class="g3">
+      <div><label>Rate (₹) *</label><input class="r" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+      <div><label>Disc %</label><input class="dc" type="number" inputmode="decimal" min="0" max="100" step="0.01" placeholder="0"></div>
+      <div><label>GST %</label><select class="g">${[0, 5, 12, 18, 28].map((g) => `<option>${g}</option>`).join('')}</select></div>
+    </div>
+    <div class="calc"><div>Taxable<b class="ct">₹0.00</b></div><div>Tax<b class="cx">₹0.00</b></div><div>Total<b class="cs">₹0.00</b></div></div>`;
+  d.querySelector('.x').onclick = () => { d.remove(); renumber(); recalc(); };
+  d.querySelector('.p').onchange = () => {
+    const p = CAT.p.find((x) => x.id === d.querySelector('.p').value);
+    d.querySelector('.hsn').value = p?.hsn || ''; d.querySelector('.u').value = p?.u || '';
+    if (p) d.querySelector('.g').value = String(p.gst);
+    d.querySelector('.b').innerHTML = (p?.b || []).map((b) => `<option value="${b.id}">${b.no} · exp ${b.exp || '—'} · ${b.q} left</option>`).join('') || '<option value="">—</option>';
+    if (!d.querySelector('.q').value && p) d.querySelector('.q').value = 1;
+    recalc();
+  };
+  d.querySelectorAll('input,select').forEach((e) => e.addEventListener('input', recalc));
+  $('items').appendChild(d);
+}
+function renumber() { document.querySelectorAll('.item .ihead span').forEach((s, i) => s.textContent = `Item #${i + 1}`); }
+function lines() {
+  return [...document.querySelectorAll('.item')].map((d) => {
+    const qty = Number(d.querySelector('.q').value) || 0, rate = Number(d.querySelector('.r').value) || 0;
+    const disc = Number(d.querySelector('.dc').value) || 0, gst = Number(d.querySelector('.g').value) || 0;
+    const taxable = r2(qty * rate - (qty * rate * disc) / 100);
+    const tax = inter() ? r2((taxable * gst) / 100) : 2 * r2((taxable * gst) / 200); // same rounding as the app
+    return { el: d, pid: d.querySelector('.p').value, bid: d.querySelector('.b').value, qty, rate, disc, gst, taxable, tax, total: r2(taxable + tax) };
+  });
+}
+function recalc() {
+  const w = inter() ? '⚠️ Inter-state supply detected — IGST will be charged' : '';
+  $('inter').textContent = w; $('inter2').textContent = w;
+  let t = 0, x = 0;
+  for (const l of lines()) {
+    l.el.querySelector('.ct').textContent = inr(l.taxable); l.el.querySelector('.cx').textContent = inr(l.tax); l.el.querySelector('.cs').textContent = inr(l.total);
+    t += l.taxable; x += l.tax;
+  }
+  $('sTaxable').textContent = inr(t);
+  if (inter()) { $('lTax1').textContent = 'IGST'; $('sTax1').textContent = inr(x); $('lTax2').textContent = ''; $('sTax2').textContent = ''; }
+  else { $('lTax1').textContent = 'CGST'; $('sTax1').textContent = inr(x / 2); $('lTax2').textContent = 'SGST'; $('sTax2').textContent = inr(x / 2); }
+  $('sTotal').textContent = inr(t + x);
+}
+$('state').onchange = recalc;
+$('addItem').onclick = addItem;
+addItem(); recalc();
+
+function send(data) {
+  if (tg?.initData) tg.sendData(JSON.stringify(data)); // inside Telegram: closes the form; the bot gets it
+  else $('err').textContent = 'Preview (outside Telegram): ' + JSON.stringify(data);
+}
+$('submit').onclick = () => {
+  if (mode === 'exp') {
+    const amt = Number($('eAmt').value), desc = $('eDesc').value.trim();
+    if (!desc || !(amt > 0)) { $('err').textContent = 'Please fill: ' + [!desc && 'Description', !(amt > 0) && 'Amount'].filter(Boolean).join(', '); return; }
+    return send({ v: 2, kind: 'exp', desc: desc.slice(0, 200), amount: amt, date: $('eDate').value || istToday(), category: $('eCat').value });
+  }
+  if (mode === 'b2b') {
+    const ls = lines().filter((l) => l.pid || l.qty || l.rate), errs = [];
+    if (!$('client').value) errs.push('Client / Buyer');
+    if (!ls.length) errs.push('at least one item');
+    if (ls.some((l) => !l.pid || !(l.qty > 0) || !(l.rate > 0))) errs.push('product, qty and rate on every item');
+    if (errs.length) { $('err').textContent = 'Please fill: ' + errs.join(', '); return; }
+    return send({ v: 2, kind: 'b2b', type: billType, date: $('date').value || istToday(), due: $('due').value || null,
+      client: $('client').value, state_code: $('pos').value, rc: $('rc2').checked, sampling: $('sampling2').checked,
+      notes: $('notes').value.trim().slice(0, 300) || null, items: ls.map((l) => ({ pid: l.pid, bid: l.bid || null, q: l.qty, r: l.rate, d: l.disc, g: l.gst })) });
+  }
+  const phone = $('phone').value.replace(/\D/g, '').slice(-10);
+  const ls = lines().filter((l) => l.pid || l.qty || l.rate);
+  const errs = [];
+  if (!$('naam').value.trim()) errs.push('Consumer Name');
+  if (phone.length < 10) errs.push('Mobile Number (10 digits)');
+  if (!$('state').value) errs.push('Place of Supply');
+  if (!ls.length) errs.push('at least one item');
+  if (ls.some((l) => !l.pid || !(l.qty > 0) || !(l.rate > 0))) errs.push('product, qty and rate on every item');
+  if (errs.length) { $('err').textContent = 'Please fill: ' + errs.join(', '); return; }
+  const st = STATES.find(([, c]) => c === $('state').value);
+  const data = { v: 2, kind: 'b2c', type: billType, date: $('date').value || istToday(), due: $('due').value || null,
+    naam: $('naam').value.trim().slice(0, 80), phone, email: $('email').value.trim().slice(0, 120) || null,
+    pincode: $('pincode').value.replace(/\D/g, '').slice(0, 6) || null, address: $('address').value.trim().slice(0, 300) || null,
+    state: st[0], state_code: st[1], rc: $('rc').checked, sampling: $('sampling').checked, pay, notes: $('notes').value.trim().slice(0, 300) || null,
+    items: ls.map((l) => ({ pid: l.pid, bid: l.bid || null, q: l.qty, r: l.rate, d: l.disc, g: l.gst })) };
+  send(data);
+};
+setMode(new URLSearchParams(location.search).get('m') || 'b2c');
+</script>
+</body>
+</html>
