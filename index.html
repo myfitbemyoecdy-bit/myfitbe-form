@@ -40,6 +40,11 @@
   .tabs3 button { font: inherit; font-weight: 600; padding: 10px 4px; border-radius: 10px; border: 2px solid transparent; background: var(--card); color: var(--fg); }
   .tabs3 button.on { border-color: var(--accent); background: var(--bg); }
   .hide { display: none !important; }
+  .seg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .seg3 button { font: inherit; padding: 9px 4px; border-radius: 8px; border: 2px solid transparent; background: var(--bg); color: var(--fg); }
+  .seg3 button.on { border-color: var(--accent); font-weight: 700; }
+  .seg3.off button { opacity: .35; pointer-events: none; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .check { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 14px; color: var(--fg); }
   .check input { width: auto; }
@@ -142,7 +147,8 @@
   <h2>💰 Payment Status</h2>
   <div class="seg" style="margin-bottom:10px"><button type="button" data-st="paid" class="on">✅ Paid</button><button type="button" data-st="issued">⏳ Payment Pending</button></div>
   <h2 class="b2c">💳 Payment Mode</h2>
-  <div class="seg b2c"><button type="button" data-pay="cash" class="on">💵 Cash</button><button type="button" data-pay="upi">📲 UPI</button></div>
+  <div class="seg3 b2c" id="payModes"><button type="button" data-pay="cash" class="on">💵 Cash</button><button type="button" data-pay="upi">📲 UPI</button><button type="button" data-pay="neft">🏦 NEFT</button></div>
+  <div class="hint b2c" id="payHint"></div>
   <label for="notes">Notes / Terms &amp; Conditions</label>
   <textarea id="notes" placeholder="Payment details, delivery instructions, notes..."></textarea>
 </div>
@@ -189,7 +195,12 @@ function setMode(m) {
 }
 document.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
 let billType = 'tax_invoice', pay = 'cash', status = 'paid';
-document.querySelectorAll('[data-st]').forEach((b) => b.onclick = () => { status = b.dataset.st; document.querySelectorAll('[data-st]').forEach((x) => x.classList.toggle('on', x === b)); });
+document.querySelectorAll('[data-st]').forEach((b) => b.onclick = () => {
+  status = b.dataset.st; document.querySelectorAll('[data-st]').forEach((x) => x.classList.toggle('on', x === b));
+  const pending = status === 'issued'; // no payment yet → no payment mode
+  $('payModes').classList.toggle('off', pending);
+  $('payHint').textContent = pending ? 'Payment pending — mode baad me, jab paisa aaye (HQ app me Paid karte waqt).' : '';
+});
 document.querySelectorAll('[data-type]').forEach((b) => b.onclick = () => { billType = b.dataset.type; document.querySelectorAll('[data-type]').forEach((x) => x.classList.toggle('on', x === b)); });
 document.querySelectorAll('[data-pay]').forEach((b) => b.onclick = () => { pay = b.dataset.pay; document.querySelectorAll('[data-pay]').forEach((x) => x.classList.toggle('on', x === b)); });
 const pos = () => (mode === 'b2b' ? $('pos') : $('state')).value;
@@ -207,11 +218,11 @@ function addItem() {
       <div><label>Unit</label><input class="u" readonly></div>
     </div>
     <div class="g3">
-      <div><label>Rate (₹) *</label><input class="r" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+      <div><label>Rate incl. GST (₹) *</label><input class="r" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
       <div><label>Disc %</label><input class="dc" type="number" inputmode="decimal" min="0" max="100" step="0.01" placeholder="0"></div>
       <div><label>GST %</label><select class="g">${[0, 5, 12, 18, 28].map((g) => `<option>${g}</option>`).join('')}</select></div>
     </div>
-    <div class="calc"><div>Taxable<b class="ct">₹0.00</b></div><div>Tax<b class="cx">₹0.00</b></div><div>Total<b class="cs">₹0.00</b></div></div>`;
+    <div class="calc"><div>Taxable<b class="ct">₹0.00</b></div><div>GST in it<b class="cx">₹0.00</b></div><div>Total<b class="cs">₹0.00</b></div></div>`;
   d.querySelector('.x').onclick = () => { d.remove(); renumber(); recalc(); };
   d.querySelector('.p').onchange = () => {
     const p = CAT.p.find((x) => x.id === d.querySelector('.p').value);
@@ -229,7 +240,10 @@ function lines() {
   return [...document.querySelectorAll('.item')].map((d) => {
     const qty = Number(d.querySelector('.q').value) || 0, rate = Number(d.querySelector('.r').value) || 0;
     const disc = Number(d.querySelector('.dc').value) || 0, gst = Number(d.querySelector('.g').value) || 0;
-    const taxable = r2(qty * rate - (qty * rate * disc) / 100);
+    // Rate is what the customer pays per unit, GST included (founder 2026-10-05). The bill stores the ex-GST rate
+    // (rate ÷ (1 + GST%)), exactly like the app, so tax is shown out of the price — never added on top.
+    const exRate = r2(rate / (1 + gst / 100));
+    const taxable = r2(qty * exRate - (qty * exRate * disc) / 100);
     const tax = inter() ? r2((taxable * gst) / 100) : 2 * r2((taxable * gst) / 200); // same rounding as the app
     return { el: d, pid: d.querySelector('.p').value, bid: d.querySelector('.b').value, qty, rate, disc, gst, taxable, tax, total: r2(taxable + tax) };
   });
@@ -268,7 +282,7 @@ $('submit').onclick = () => {
     if (ls.some((l) => !l.pid || !(l.qty > 0) || !(l.rate > 0))) errs.push('product, qty and rate on every item');
     if (errs.length) { $('err').textContent = 'Please fill: ' + errs.join(', '); return; }
     return send({ v: 2, kind: 'b2b', type: billType, date: $('date').value || istToday(), due: $('due').value || null,
-      client: $('client').value, state_code: $('pos').value, status, rc: $('rc2').checked, sampling: $('sampling2').checked,
+      client: $('client').value, state_code: $('pos').value, status, incl: true, rc: $('rc2').checked, sampling: $('sampling2').checked,
       notes: $('notes').value.trim().slice(0, 300) || null, items: ls.map((l) => ({ pid: l.pid, bid: l.bid || null, q: l.qty, r: l.rate, d: l.disc, g: l.gst })) });
   }
   const phone = $('phone').value.replace(/\D/g, '').slice(-10);
@@ -281,10 +295,10 @@ $('submit').onclick = () => {
   if (ls.some((l) => !l.pid || !(l.qty > 0) || !(l.rate > 0))) errs.push('product, qty and rate on every item');
   if (errs.length) { $('err').textContent = 'Please fill: ' + errs.join(', '); return; }
   const st = STATES.find(([, c]) => c === $('state').value);
-  const data = { v: 2, kind: 'b2c', status, type: billType, date: $('date').value || istToday(), due: $('due').value || null,
+  const data = { v: 2, kind: 'b2c', status, incl: true, type: billType, date: $('date').value || istToday(), due: $('due').value || null,
     naam: $('naam').value.trim().slice(0, 80), phone, email: $('email').value.trim().slice(0, 120) || null,
     pincode: $('pincode').value.replace(/\D/g, '').slice(0, 6) || null, address: $('address').value.trim().slice(0, 300) || null,
-    state: st[0], state_code: st[1], rc: $('rc').checked, sampling: $('sampling').checked, pay, notes: $('notes').value.trim().slice(0, 300) || null,
+    state: st[0], state_code: st[1], rc: $('rc').checked, sampling: $('sampling').checked, pay: status === 'issued' ? null : pay, notes: $('notes').value.trim().slice(0, 300) || null,
     items: ls.map((l) => ({ pid: l.pid, bid: l.bid || null, q: l.qty, r: l.rate, d: l.disc, g: l.gst })) };
   send(data);
 };
