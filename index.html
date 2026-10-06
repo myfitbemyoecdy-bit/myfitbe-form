@@ -36,8 +36,8 @@
   .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .tabs button, .seg button { font: inherit; padding: 9px; border-radius: 8px; border: 2px solid transparent; background: var(--bg); color: var(--fg); }
   .tabs button.on, .seg button.on { border-color: var(--accent); font-weight: 700; }
-  .tabs3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 12px; }
-  .tabs3 button { font: inherit; font-weight: 600; padding: 10px 4px; border-radius: 10px; border: 2px solid transparent; background: var(--card); color: var(--fg); }
+  .tabs3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+  .tabs3 button { font: inherit; font-size: 13px; font-weight: 600; padding: 10px 2px; border-radius: 10px; border: 2px solid transparent; background: var(--card); color: var(--fg); }
   .tabs3 button.on { border-color: var(--accent); background: var(--bg); }
   .hide { display: none !important; }
   .seg3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -69,6 +69,7 @@
   <button type="button" data-mode="b2c" class="on">B2C Bill</button>
   <button type="button" data-mode="b2b">B2B Invoice</button>
   <button type="button" data-mode="exp">Expense</button>
+  <button type="button" data-mode="rto">↩️ RTO</button>
 </div>
 
 <div class="card bill">
@@ -76,9 +77,8 @@
   <div class="tabs" id="types">
     <button type="button" data-type="tax_invoice" class="on">Tax Invoice</button>
     <button type="button" data-type="proforma">Proforma Invoice</button>
-    <button type="button" data-type="credit_note">Credit Note</button>
-    <button type="button" data-type="debit_note">Debit Note</button>
   </div>
+  <div class="hint">Credit / Debit Note → <b>↩️ RTO</b> tab (it is always made against a bill).</div>
   <div class="g2">
     <div><label for="date">Billing Date</label><input id="date" type="date"></div>
     <div><label for="due">Due Date (Optional)</label><input id="due" type="date"></div>
@@ -106,6 +106,33 @@
   </div>
   <label for="eCat">Category</label>
   <select id="eCat"></select>
+</div>
+
+<div class="card rto">
+  <h2>↩️ RTO / Return → Credit Note</h2>
+  <label for="rFind">Bill no. or customer phone *</label>
+  <input id="rFind" type="text" placeholder="e.g. B2C/26-27/0123 or 9876543210" autocomplete="off">
+  <label>What happened?</label>
+  <div class="seg3" id="rReason"><button type="button" data-r="rto" class="on">📦 RTO</button><button type="button" data-r="customer_return">↩️ Return</button><button type="button" data-r="damaged">💥 Damaged</button></div>
+  <div id="rtoOnly">
+    <label>Parcel</label>
+    <div class="seg3" id="rParcel"><button type="button" data-p="received" class="on">📦 Came back</button><button type="button" data-p="lost">❓ Lost</button><button type="button" data-p="damaged">💥 Broken</button></div>
+    <div class="g2">
+      <div><label for="rCourier">Courier</label><input id="rCourier" type="text" placeholder="e.g. Delhivery"></div>
+      <div><label for="rAwb">AWB / Tracking</label><input id="rAwb" type="text" autocomplete="off"></div>
+    </div>
+    <div class="g2">
+      <div><label for="rWhy">Why it came back</label><select id="rWhy"><option>Customer refused</option><option>Not reachable</option><option>Wrong / incomplete address</option><option>Order cancelled</option><option>Other</option></select></div>
+      <div><label for="rCharge">RTO charge ₹</label><input id="rCharge" type="number" inputmode="decimal" min="0" step="0.01" placeholder="optional"></div>
+    </div>
+  </div>
+  <label>Money</label>
+  <div class="seg3" id="rMoney"><button type="button" data-m="not_collected" class="on">💵 COD / settled</button><button type="button" data-m="refund_pending">⏳ Refund due</button><button type="button" data-m="refunded">✅ Refunded</button></div>
+  <div class="g2">
+    <div><label>How much came back</label><div class="seg" id="rScope"><button type="button" data-s="full" class="on">🔁 Full bill</button><button type="button" data-s="part">✂️ Some</button></div></div>
+    <div><label for="rDate">Date</label><input id="rDate" type="date"></div>
+  </div>
+  <div class="hint">The bot finds the bill, shows the credit note, and saves it only after your ✅. Stock returns only for a parcel that came back.</div>
 </div>
 
 <div class="card b2c">
@@ -173,7 +200,14 @@ const r2 = (n) => Math.round(n * 100) / 100;
 const inr = (n) => '₹' + r2(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const istToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-$('date').value = istToday(); $('eDate').value = istToday();
+$('date').value = istToday(); $('eDate').value = istToday(); $('rDate').value = istToday();
+// ↩️ RTO tab: one-of-three button groups
+const pickOne = (box, attr) => { $(box).querySelectorAll('button').forEach((b) => b.onclick = () => {
+  $(box).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  if (box === 'rReason') $('rtoOnly').classList.toggle('hide', b.dataset.r !== 'rto');
+}); };
+['rReason', 'rParcel', 'rMoney', 'rScope'].forEach((b) => pickOne(b));
+const onOf = (box, attr) => $(box).querySelector('button.on').dataset[attr];
 $('eCat').innerHTML = EXP_CATS.map((c) => `<option>${c}</option>`).join('');
 $('client').innerHTML = '<option value="">— Select client —</option>' + (CAT.c || []).map((c) => `<option value="${c.id}">${c.n}</option>`).join('');
 $('state').innerHTML = STATES.map(([n, c]) => `<option value="${c}">${n} (${c})</option>`).join('');
@@ -187,10 +221,11 @@ function setMode(m) {
   document.querySelectorAll('.b2c').forEach((e) => e.classList.toggle('hide', m !== 'b2c'));
   document.querySelectorAll('.b2b').forEach((e) => e.classList.toggle('hide', m !== 'b2b'));
   document.querySelectorAll('.exp').forEach((e) => e.classList.toggle('hide', m !== 'exp'));
-  document.querySelectorAll('.bill').forEach((e) => e.classList.toggle('hide', m === 'exp'));
-  $('title').textContent = { b2c: '🧾 Create B2C Bill', b2b: '🧾 Create Tax Invoice (B2B)', exp: '💸 Add Expense' }[m];
+  document.querySelectorAll('.rto').forEach((e) => e.classList.toggle('hide', m !== 'rto'));
+  document.querySelectorAll('.bill').forEach((e) => e.classList.toggle('hide', m === 'exp' || m === 'rto'));
+  $('title').textContent = { b2c: '🧾 Create B2C Bill', b2b: '🧾 Create Tax Invoice (B2B)', exp: '💸 Add Expense', rto: '↩️ RTO / Return' }[m];
   $('typeTitle').textContent = m === 'b2b' ? '📋 Select Invoice Type' : '📋 Select Bill Type';
-  $('submit').textContent = m === 'exp' ? '💾 Save Expense' : '💾 Save Bill';
+  $('submit').textContent = m === 'exp' ? '💾 Save Expense' : m === 'rto' ? '➡️ Find bill & check' : '💾 Save Bill';
   $('err').textContent = ''; recalc();
 }
 document.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
@@ -272,6 +307,14 @@ function send(data) {
   else $('err').textContent = 'Preview (outside Telegram): ' + JSON.stringify(data);
 }
 $('submit').onclick = () => {
+  if (mode === 'rto') {
+    const find = $('rFind').value.trim();
+    if (!/\//.test(find) && find.replace(/\D/g, '').length < 10) { $('err').textContent = 'Please fill: Bill no. or 10-digit phone'; return; }
+    const reason = onOf('rReason', 'r');
+    return send({ v: 2, kind: 'rto', find: find.slice(0, 40), reason, money: onOf('rMoney', 'm'), full: onOf('rScope', 's') === 'full',
+      date: $('rDate').value || istToday(), ...(reason === 'rto' ? { parcel: onOf('rParcel', 'p'), courier: $('rCourier').value.trim().slice(0, 60) || null,
+      awb: $('rAwb').value.trim().slice(0, 40) || null, why: $('rWhy').value, charge: Number($('rCharge').value) || null } : {}) });
+  }
   if (mode === 'exp') {
     const amt = Number($('eAmt').value), desc = $('eDesc').value.trim();
     if (!desc || !(amt > 0)) { $('err').textContent = 'Please fill: ' + [!desc && 'Description', !(amt > 0) && 'Amount'].filter(Boolean).join(', '); return; }
